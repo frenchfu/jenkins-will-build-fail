@@ -96,7 +96,7 @@ EOF
 > 📎 **完整失敗日誌夾檔（同仁無需登入 Jenkins 即可下載查看）**：
 > 👉 [下載 build_failure_trace.log](__LOG_URI__)
 > 
-> ⚠️ **請 @**all** 系統三課相關負責同仁儘速排查！**
+> ⚠️ **請 @**傅炤棋** 及 @**all** 系統三課相關負責同仁儘速排查！**
 🔗 [點此查看 Jenkins 控制台日誌](__BUILD_URL__console)
 EOF
 
