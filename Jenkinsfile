@@ -42,22 +42,25 @@ pipeline {
     post {
         failure {
             echo '=== [Alert] 過版失敗！正在發送警報至關貿通訊 系統三課(T55)... ==='
+            script {
+                def alertText = """🚨 **【Jenkins 過版失敗通知】**
+> **專案名稱**：`jenkins-will-build-fail`
+> **分支 (Branch)**：`main`
+> **失敗階段**：`Unit & Regression Test (單元與整合測試失敗)`
+> **錯誤細節**：`Connection refused to 192.168.10.25:1521 (PLAND_DB)`
+> **過版執行者**：`david.fu`
+> 
+> ⚠️ **請 @**課-系統三課(T55)** 相關負責同仁儘速排查！**
+🔗 [點此查看 Jenkins 控制台日誌](${env.BUILD_URL}console)"""
+                writeFile file: 'zulip_alert.txt', text: alertText
+            }
             sh '''
                 curl -k -s -X POST "${ZULIP_URL}" \
                   -u "${ZULIP_AUTH}" \
                   -d "type=stream" \
                   -d "to=${TARGET_STREAM}" \
                   -d "topic=過版發布 / CI-CD" \
-                  --data-urlencode "content=🚨 **【Jenkins 過版失敗通知】**
-> **專案名稱**：\`jenkins-will-build-fail\`
-> **分支 (Branch)**：\`main\`
-> **Commit**：\`${GIT_COMMIT}\`
-> **失敗階段**：\`Unit & Regression Test (單元與整合測試失敗)\`
-> **錯誤細節**：\`Connection refused to 192.168.10.25:1521 (PLAND_DB)\`
-> **過版執行者**：\`david.fu\`
-> 
-> ⚠️ **請 @**課-系統三課(T55)** 相關負責同仁儘速排查！**
-🔗 [點此查看 Jenkins 控制台日誌](${BUILD_URL}console)"
+                  --data-urlencode "content@zulip_alert.txt"
             '''
         }
         success {
