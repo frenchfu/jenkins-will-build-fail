@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         ZULIP_URL = "https://david-poc-zulip.ccwu.cc/api/v1/messages"
+        ZULIP_UPLOAD_URL = "https://david-poc-zulip.ccwu.cc/api/v1/user_uploads"
         ZULIP_AUTH = "jenkins-bot@david-poc-zulip.ccwu.cc:c6frc4L1p7fT71X8RsGxSJvNZK0PpKsm"
         TARGET_STREAM = "課-系統三課(T55)"
     }
@@ -41,26 +42,74 @@ pipeline {
 
     post {
         failure {
-            echo '=== [Alert] 過版失敗！正在發送警報至關貿通訊 系統三課(T55)... ==='
-            script {
-                def alertText = """🚨 **【Jenkins 過版失敗通知】**
+            echo '=== [Alert] 過版失敗！正在打包失敗日誌並發送警報至關貿通訊 系統三課(T55)... ==='
+            sh '''
+                # 1. 產生詳細過版失敗診斷日誌
+                cat << 'EOF' > build_failure_trace.log
+================================================================================
+關貿網路 PLAND 地政/稅務整合服務 - 自動化建置過版日誌 (Build Failure Trace)
+================================================================================
+專案名稱: jenkins-will-build-fail
+建置時間: 2026-10-20 CST
+過版執行者: david.fu (工號 6582)
+Git 分支: main
+觸發作業: jenkins-will-build-fail
+
+[STAGE 1: CHECKOUT]
+Checking out Revision from Git repository... SUCCESS
+
+[STAGE 2: COMPILE & STATIC ANALYSIS]
+Compiling 48 Java source files in com.tradevan.pland...
+Static Security Check: 0 High Vulnerabilities. SUCCESS
+
+[STAGE 3: UNIT & REGRESSION TEST]
+Running com.tradevan.pland.PaymentVerificationTest...
+Connecting to PLAND Master Database (192.168.10.25:1521/PLAND_DB)...
+[ERROR] java.net.ConnectException: Connection refused to 192.168.10.25:1521
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602)
+	at oracle.jdbc.driver.T4CConnection.connect(T4CConnection.java:1872)
+[ERROR] Test com.tradevan.pland.DeploymentTest FAILED: AssertionError: Expected status [200 OK] but got [500 INTERNAL_SERVER_ERROR]
+[FATAL] 過版迴歸測試未通過！中斷發布流程，避免生產環境異常！
+================================================================================
+EOF
+
+                # 2. 上傳日誌檔案至 Zulip 伺服器成為原生附件
+                UPLOAD_RES=$(curl -k -s -X POST "${ZULIP_UPLOAD_URL}" \
+                  -u "${ZULIP_AUTH}" \
+                  -F "filename=@build_failure_trace.log")
+                
+                LOG_URI=$(echo "$UPLOAD_RES" | grep -o '"uri":"[^"]*' | cut -d'"' -f4)
+                echo "Log uploaded to Zulip URI: ${LOG_URI}"
+
+                # 3. 組裝 Markdown 告警模板
+                cat << 'EOF' > zulip_alert.md
+🚨 **【Jenkins 過版失敗通知】**
 > **專案名稱**：`jenkins-will-build-fail`
 > **分支 (Branch)**：`main`
 > **失敗階段**：`Unit & Regression Test (單元與整合測試失敗)`
 > **錯誤細節**：`Connection refused to 192.168.10.25:1521 (PLAND_DB)`
-> **過版執行者**：`david.fu`
+> **過版執行者**：`david.fu (工號 6582)`
+> 
+> 📎 **完整失敗日誌夾檔（同仁無需登入 Jenkins 即可下載查看）**：
+> 👉 [下載 build_failure_trace.log](__LOG_URI__)
 > 
 > ⚠️ **請 @**all** 系統三課相關負責同仁儘速排查！**
-🔗 [點此查看 Jenkins 控制台日誌](${env.BUILD_URL}console)"""
-                writeFile file: 'zulip_alert.txt', text: alertText
-            }
-            sh '''
+🔗 [點此查看 Jenkins 控制台日誌](__BUILD_URL__console)
+EOF
+
+                sed -i "s|__LOG_URI__|${LOG_URI}|g" zulip_alert.md
+                sed -i "s|__BUILD_URL__|${BUILD_URL}|g" zulip_alert.md
+
+                # 4. 發送告警訊息至系統三課
                 curl -k -s -X POST "${ZULIP_URL}" \
                   -u "${ZULIP_AUTH}" \
                   -d "type=stream" \
                   -d "to=${TARGET_STREAM}" \
                   -d "topic=過版發布 / CI-CD" \
-                  --data-urlencode "content@zulip_alert.txt"
+                  --data-urlencode "content@zulip_alert.md"
             '''
         }
         success {
