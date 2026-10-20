@@ -50,7 +50,7 @@ pipeline {
 > **錯誤細節**：`Connection refused to 192.168.10.25:1521 (PLAND_DB)`
 > **過版執行者**：`david.fu`
 > 
-> ⚠️ **請 @**課-系統三課(T55)** 相關負責同仁儘速排查！**
+> ⚠️ **請 @**all** 系統三課相關負責同仁儘速排查！**
 🔗 [點此查看 Jenkins 控制台日誌](${env.BUILD_URL}console)"""
                 writeFile file: 'zulip_alert.txt', text: alertText
             }
